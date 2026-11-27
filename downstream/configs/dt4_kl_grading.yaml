@@ -1,0 +1,26 @@
+# DT4 -- five-class Kellgren-Lawrence grading (Osteoarthritis Initiative; n = 8,953).
+# Frozen encoder + linear head on the globally pooled representation, cross-entropy
+# (class-weighted) loss; reported metric: test balanced accuracy (patient-level 5-fold CV).
+# Manifest: python -m downstream.prepare_manifests image-folder --root <osteoarthritis_classification> --patient-regex '^(.+)_(?:left|right)$' --out data/downstream/dt4_kl_grading.csv
+
+task: DT4
+name: kl_grading
+type: classification
+manifest: data/downstream/dt4_kl_grading.csv
+num_classes: 5
+class_weighting: true
+metric: balanced_accuracy
+image_size: 224
+n_folds: 5
+val_fraction: 0.15
+seed: 123
+num_workers: 8
+search:
+  n_trials: 10
+  lr: [1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, 1.0e-2]
+  batch_size: [16, 32, 64]
+  weight_decay: [0.0, 1.0e-5, 1.0e-4]
+training:
+  max_epochs: 100
+  patience: 20
+  checkpoint_metric: val_metric   # val_loss | val_metric

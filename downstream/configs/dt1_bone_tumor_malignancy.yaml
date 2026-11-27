@@ -1,0 +1,26 @@
+# DT1 -- bone-tumor malignancy prediction, benign vs malignant (internal; n = 1,784).
+# Frozen encoder + linear head on the globally pooled representation, cross-entropy
+# loss; reported metric: test balanced accuracy (patient-level 5-fold CV).
+# Manifest: python -m downstream.prepare_manifests image-folder --root <bounding_boxes_processed> --patient-map <file_name,patient_id CSV> --out data/downstream/dt1_bone_tumor_malignancy.csv
+
+task: DT1
+name: bone_tumor_malignancy
+type: classification
+manifest: data/downstream/dt1_bone_tumor_malignancy.csv
+num_classes: 2
+class_weighting: false
+metric: balanced_accuracy
+image_size: 224
+n_folds: 5
+val_fraction: 0.15
+seed: 123
+num_workers: 8
+search:
+  n_trials: 10
+  lr: [1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, 1.0e-2]
+  batch_size: [16, 32, 64]
+  weight_decay: [0.0, 1.0e-5, 1.0e-4]
+training:
+  max_epochs: 100
+  patience: 20
+  checkpoint_metric: val_loss   # val_loss | val_metric

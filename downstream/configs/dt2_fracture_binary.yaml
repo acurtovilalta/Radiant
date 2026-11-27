@@ -1,0 +1,26 @@
+# DT2 -- binary fracture classification (FracAtlas; n = 4,024).
+# Frozen encoder + linear head on the globally pooled representation, cross-entropy
+# loss; reported metric: test balanced accuracy (patient-level 5-fold CV).
+# Manifest: python -m downstream.prepare_manifests image-folder --root <FracAtlas/images_processed> --out data/downstream/dt2_fracture_binary.csv
+
+task: DT2
+name: fracture_binary
+type: classification
+manifest: data/downstream/dt2_fracture_binary.csv
+num_classes: 2
+class_weighting: false
+metric: balanced_accuracy
+image_size: 224
+n_folds: 5
+val_fraction: 0.15
+seed: 123
+num_workers: 8
+search:
+  n_trials: 10
+  lr: [1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, 1.0e-2]
+  batch_size: [16, 32, 64]
+  weight_decay: [0.0, 1.0e-5, 1.0e-4]
+training:
+  max_epochs: 100
+  patience: 20
+  checkpoint_metric: val_loss   # val_loss | val_metric

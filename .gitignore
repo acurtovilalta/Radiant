@@ -1,0 +1,14 @@
+# environments
+.venv/
+*.egg-info/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# run artifacts
+outputs/
+wandb/
+dinov3_model_cache/
+
+# data (never commit patient data / manifests)
+data/

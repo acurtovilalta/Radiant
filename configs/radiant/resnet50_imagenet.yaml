@@ -1,0 +1,145 @@
+# RADIANT -- ResNet50 X-ray encoder initialised from ImageNet weights.
+# X-ray + MRI, 4 warm-up + 46 joint epochs (50 total).
+#
+# Downstream evaluation uses checkpoints/final.pt (the final epoch; no checkpoint selection).
+# Launch (2 GPUs, DDP; per-GPU batch sizes below):
+#     torchrun --nproc_per_node=2 train.py --config configs/radiant/resnet50_imagenet.yaml
+# Paths are relative to the repository root; see README.md (Data) for the manifest format.
+# Comments list the accepted values of every option.
+
+seed: 13                                    # any integer
+output_dir: outputs/radiant/resnet50_imagenet  # any folder (created if missing)
+use_amp: true                               # true | false (mixed precision)
+log_every_steps: 20                         # integer >= 1
+val_every_epochs: 4                         # integer >= 1 (validation is logged only, never used for selection)
+log_bridge_gradient_audit: true             # true | false (log gradient norms reaching the projection bridge)
+bridge_gradient_audit_every_steps: 100      # integer >= 1
+xray_data:
+  manifest_path: data/manifests/xray_manifest.csv  # path to the X-ray manifest CSV
+  path_column: file_path_processed          # any manifest column holding the image path
+  split_group_column: patient_id            # any manifest column; rows sharing a value land in the same split
+  split: train                              # train | val
+  batch_size: 32                            # integer >= 1 (per GPU)
+  num_workers: 12                           # integer >= 0
+  shuffle: true                             # true | false
+  drop_last: false                          # true | false
+  pin_memory: true                          # true | false
+  val_fraction: 0.05                        # float in [0, 1) (share of patients held out for validation)
+  split_seed: 42                            # any integer
+  shared_family_batching: true              # true | false (family-synchronised X-ray/MRI batches)
+  families_per_batch: 4                     # integer in [1, 8]
+  global_crop_size: 224                     # integer (pixels)
+  local_crop_size: 96                       # integer (pixels)
+  num_local_crops: 2                        # integer >= 0
+  anatomy_column: coarse_anatomy            # any manifest column holding the anatomy family
+  view_column: view_or_plane                # any manifest column holding the view (frontal | lateral)
+mri_data:
+  manifest_path: data/manifests/mri_manifest.csv  # path to the MRI manifest CSV
+  path_column: file_path_processed          # any manifest column holding the volume path
+  split_group_column: patient_id            # any manifest column; rows sharing a value land in the same split
+  split: train                              # train | val
+  batch_size: 16                            # integer >= 1 (per GPU)
+  num_workers: 8                            # integer >= 0
+  shuffle: true                             # true | false
+  drop_last: false                          # true | false
+  pin_memory: true                          # true | false
+  val_fraction: 0.05                        # float in [0, 1)
+  split_seed: 42                            # any integer
+  shared_family_batching: true              # true | false
+  families_per_batch: 4                     # integer in [1, 8]
+  global_crop_size: [32, 192, 192]          # [depth, height, width] in voxels
+  local_crop_size: [32, 128, 128]           # [depth, height, width] in voxels
+  num_local_crops: 2                        # integer >= 0
+  anatomy_column: anatomy                   # any manifest column holding the anatomy family
+xray_model:
+  backbone: resnet50                        # resnet18 | resnet34 | resnet50 | dinov3_vitb16
+  in_channels: 1                            # integer >= 1 (dinov3_vitb16: 1 only)
+  pretrained: true                          # true (ImageNet for ResNets, DINOv3 for dinov3_vitb16) | false (scratch)
+  embedding_dim: 256                        # integer >= 1 (must equal prototype_banks.embedding_dim)
+  projector_hidden_dim: 1024                # integer >= 1
+  projector_layers: 2                       # integer >= 1
+mri_model:
+  backbone: resnet34                        # resnet34
+  in_channels: 1                            # integer >= 1
+  base_channels: 32                         # integer >= 1 (width of the first stage)
+  embedding_dim: 256                        # integer >= 1 (must equal prototype_banks.embedding_dim)
+  projector_hidden_dim: 512                 # integer >= 1
+  projector_layers: 2                       # integer >= 1
+  use_mri_projection_bridge: true           # true | false
+  mri_projection_num_projections: 8         # integer >= 1 (n, the number of projection queries)
+  mri_projection_embedding_dim: 256         # integer >= 1
+  mri_projection_attention_temperature: 0.5  # float > 0 (tau_p)
+  stage_stride_schedule: half_depth         # half_depth
+  pretrained_checkpoint: outputs/mri_pretraining/checkpoint_latest.pt  # path to the Models Genesis checkpoint | null (scratch)
+prototype_banks:
+  embedding_dim: 256                        # integer >= 1
+  prototypes_per_family: 96                 # integer >= 1, or a {family: integer} mapping
+  normalize_prototypes: true                # true | false (L2-normalise the prototypes)
+xray_assignment:
+  sinkhorn_epsilon: 0.03                    # float > 0
+  sinkhorn_iterations: 20                   # integer >= 1
+  use_feature_queue: false                  # true | false
+  queue_size: 0                             # integer >= 0 (embeddings kept per anatomy family)
+  queue_start_steps: 0                      # integer >= 0 (steps before the queue is used)
+mri_assignment:
+  sinkhorn_epsilon: 0.03                    # float > 0
+  sinkhorn_iterations: 20                   # integer >= 1
+  use_feature_queue: true                   # true | false
+  queue_size: 128                           # integer >= 0 (embeddings kept per anatomy family)
+  queue_start_steps: 100                    # integer >= 0 (steps before the queue is used)
+xray_swav_loss:
+  temperature: 0.1                          # float > 0
+  num_assignment_crops: 2                   # integer in [1, 2] (the global crops provide the codes)
+mri_swav_loss:
+  temperature: 0.1                          # float > 0
+  num_assignment_crops: 2                   # integer in [1, 2]
+schedule:
+  warm_start_epochs: 4                      # integer >= 0
+  joint_epochs: 46                          # integer >= 0
+  cross_modal_ramp_epochs: 10               # integer >= 0 (linear ramp of the cross-modal losses)
+  enable_xray_cnn_gradual_unfreeze: true    # true | false (top-down unfreezing of the ResNet stages)
+  xray_cnn_unfreeze_start_epoch: 4          # integer >= 0
+  xray_cnn_unfreeze_epochs_per_stage: 3     # integer >= 1
+  xray_cnn_unfreeze_stages_per_step: 1      # integer >= 1
+optimizer:
+  lr: 0.000448                              # float > 0
+  weight_decay: 0.00000407                  # float >= 0
+  betas: [0.9, 0.999]                       # [beta1, beta2], each in [0, 1)
+  eps: 1.0e-08                              # float > 0
+  grad_clip_norm: 0.5                       # float > 0 | null (no clipping)
+  min_lr_ratio: 0.12828007938486083         # float in [0, 1] (final lr / lr of the cosine schedule)
+  warmup_epochs: 3                          # integer >= 0 (linear lr warm-up)
+checkpoint:
+  output_dir: outputs/radiant/resnet50_imagenet/checkpoints  # any folder
+  save_every_epochs: 4                      # integer >= 1 (latest.pt for resuming; final.pt is always written at the end)
+  keep_last_only: false                     # true | false
+  resume_path: null                         # path to a latest.pt | null
+wandb:
+  enabled: true                             # true | false
+  project: radiant                          # any W&B project name
+  run_name: radiant_resnet50_imagenet       # any string | null
+  group: radiant                            # any string | null
+  tags: [radiant, resnet50, imagenet]       # list of strings
+distributed:
+  enabled: true                             # true (launch with torchrun) | false (single process)
+  backend: nccl                             # nccl | gloo
+lambda_xray_view: 0.10396062728888134       # float >= 0 (0 disables the X-ray view loss)
+lambda_centroid_alignment: 2.64             # float >= 0 (0 disables the centroid alignment loss)
+centroid_alignment:
+  normalize_centroids: true                 # true | false
+  min_prototype_mass: 0.0001                # float >= 0 (prototypes with less mass are skipped)
+  distance: mse                             # mse | l1
+lambda_projection_mil_contrastive: 0.03695519382684474  # float >= 0 (0 disables the MIL loss)
+projection_mil_temperature: 0.07            # float > 0
+lambda_projection_attention_diversity: 0.040  # float >= 0 (0 disables L_div)
+runtime:
+  cudnn_enabled: true                       # true | false
+  cudnn_benchmark: true                     # true | false
+  cudnn_deterministic: false                # true | false
+  allow_cudnn_fallback_on_init_error: true  # true | false (retry without cuDNN if it fails to initialise)
+ablations:
+  prototype_scope: anatomy_specific         # anatomy_specific | global (one bank shared by all families, A5)
+devices:                                    # used only when distributed.enabled is false
+  xray: null                                # cuda:N | cpu | null
+  mri: null                                 # cuda:N | cpu | null
+  output: null                              # cuda:N | cpu | null (null: the X-ray device)

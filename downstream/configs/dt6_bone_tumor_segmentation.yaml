@@ -1,0 +1,33 @@
+# DT6 -- bone-tumor segmentation (internal; n = 1,896).
+# Frozen encoder + multi-scale decoder (ResNet: layer3/layer2 skips; ViT: block-4 auxiliary
+# features), soft Dice loss, mask-synchronized augmentation of the training images; reported
+# metric: test Dice (prediction thresholded at 0.5, Dice per image, mean over the images of a fold;
+# patient-level 5-fold CV).
+# Manifest: python -m downstream.prepare_manifests mask-folders --images <XR-BoneTumorSeg-Internal/images> --masks <XR-BoneTumorSeg-Internal/masks> --patient-map <file_name,patient_id CSV> --out data/downstream/dt6_bone_tumor_segmentation.csv
+
+task: DT6
+name: bone_tumor_segmentation
+type: segmentation
+manifest: data/downstream/dt6_bone_tumor_segmentation.csv
+metric: dice
+image_size: 224
+n_folds: 5
+val_fraction: 0.15
+seed: 123
+num_workers: 8
+decoder:
+  resnet_skip_layers: [layer3, layer2]
+  vit_aux_blocks: [4]
+  base_width: 256
+  min_stages: 2
+  dropout: 0.3
+augment: true
+search:
+  n_trials: 12
+  lr: [1.0e-4, 5.0e-4, 1.0e-3]
+  batch_size: [4, 8, 10, 12]
+  weight_decay: [1.0e-5, 1.0e-4, 5.0e-4, 1.0e-3]
+training:
+  max_epochs: 100
+  patience: 10
+  checkpoint_metric: val_loss   # val_loss | val_dice

@@ -1,0 +1,33 @@
+# DT7 -- fracture segmentation (FracAtlas; n = 717).
+# Frozen encoder + multi-scale decoder (ResNet: layer3/layer2 skips; ViT: block-4 auxiliary
+# features), soft Dice loss, mask-synchronized augmentation of the training images; reported
+# metric: test Dice (prediction thresholded at 0.5, Dice per image, mean over the images of a fold;
+# patient-level 5-fold CV).
+# Manifest: python -m downstream.prepare_manifests coco-masks --coco-json <COCO_fracture_masks.json> --images <FracAtlas/images_processed/Fractured> --masks-out data/downstream/dt7_masks --out data/downstream/dt7_fracture_segmentation.csv
+
+task: DT7
+name: fracture_segmentation
+type: segmentation
+manifest: data/downstream/dt7_fracture_segmentation.csv
+metric: dice
+image_size: 224
+n_folds: 5
+val_fraction: 0.15
+seed: 123
+num_workers: 8
+decoder:
+  resnet_skip_layers: [layer3, layer2]
+  vit_aux_blocks: [4]
+  base_width: 256
+  min_stages: 2
+  dropout: 0.2
+augment: true
+search:
+  n_trials: 12
+  lr: [1.0e-4, 5.0e-4, 1.0e-3]
+  batch_size: [4, 8, 10, 12]
+  weight_decay: [1.0e-5, 1.0e-4, 5.0e-4, 1.0e-3]
+training:
+  max_epochs: 100
+  patience: 10
+  checkpoint_metric: val_dice   # val_loss | val_dice

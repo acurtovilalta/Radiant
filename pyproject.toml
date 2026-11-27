@@ -1,0 +1,35 @@
+[project]
+name = "radiant"
+version = "1.0.0"
+description = "RADIANT: unpaired X-ray + MRI self-supervised pretraining for musculoskeletal imaging (SwAV + learned MRI projection bridge)"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "matplotlib==3.11.2",
+    "monai==1.6.1",
+    "nibabel==5.4.2",
+    "numpy==2.4.6",
+    "pandas==3.0.1",
+    "pyyaml==6.0.3",
+    "scikit-learn==1.8.0",
+    "torch==2.11.0",
+    "torchvision==0.26.0",
+    "transformers==5.22.2",
+    "wandb==0.25.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.2.0"]
+downstream = ["pycocotools==2.0.11"]  # only for building the DT7 (FracAtlas COCO) masks
+
+[tool.setuptools.packages.find]
+include = ["radiant*", "downstream*"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true

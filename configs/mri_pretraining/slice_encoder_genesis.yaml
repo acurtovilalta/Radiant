@@ -1,0 +1,75 @@
+# Models Genesis restoration pretraining of the 2D slice encoder of control C4 (SliceRADIANT, ResNet34-2D).
+# The counterpart of mri_encoder_genesis.yaml for C4: same epochs, optimizer and corruptions, applied to each of
+# the 8 evenly spaced slices (central 50%) that C4 uses, cropped to 224 px. The X-ray-style appearance
+# augmentations are switched off; every slice is reconstructed from its own corrupted copy.
+# Produces outputs/mri_pretraining_slice2d/checkpoint_latest.pt, which configs/controls/c4_slice_radiant.yaml loads.
+#
+#     python pretrain_mri.py --config configs/mri_pretraining/slice_encoder_genesis.yaml
+
+seed: 13
+epochs: 50
+output_dir: outputs/mri_pretraining_slice2d
+wandb_project: radiant
+wandb_run_name: mri_pretraining_slice2d
+num_visual_examples: 10
+log_every_steps: 20
+use_amp: true
+mri_data:
+  manifest_path: data/manifests/mri_manifest.csv
+  path_column: file_path_processed
+  split_group_column: patient_id
+  split: train
+  batch_size: 16
+  num_workers: 16
+  shuffle: true
+  drop_last: false
+  pin_memory: true
+  val_fraction: 0.05
+  split_seed: 42
+  shared_family_batching: true
+  families_per_batch: 4
+  global_crop_size: 224
+  local_crop_size: 96
+  num_local_crops: 0
+  anatomy_column: anatomy
+  slice_mode: evenly_spaced
+  num_slices: 8
+  slice_central_fraction: 0.5
+  augmentations:
+    num_global_crops: 1
+    intensity_jitter_prob: 0.0
+    gaussian_blur_prob: 0.0
+    gaussian_noise_prob: 0.0
+    affine_prob: 0.0
+mri_model:
+  backbone: resnet34
+  encoder_type: slice_2d
+  in_channels: 1
+  base_channels: 32
+  embedding_dim: 256
+  projector_hidden_dim: 512
+  projector_layers: 2
+  use_mri_projection_bridge: true
+  mri_projection_num_projections: 8
+  mri_projection_embedding_dim: 256
+  mri_projection_attention_temperature: 0.5
+  stage_stride_schedule: half_depth
+optimizer:
+  lr: 0.0003
+  weight_decay: 1.0e-05
+  betas: [0.9, 0.999]
+  eps: 1.0e-08
+  grad_clip_norm: 1.0
+  min_lr_ratio: 0.1
+  warmup_epochs: 1
+genesis:
+  nonlinear_prob: 0.9
+  nonlinear_control_points: 4
+  local_shuffle_prob: 0.5
+  local_shuffle_num_windows: 200
+  local_shuffle_max_window_size: 8
+  inpaint_prob: 0.5
+  inpaint_num_cuboids: 5
+  inpaint_size_range: [0.1, 0.2]
+  outpaint_prob: 0.2
+  outpaint_keep_size_range: [0.6, 0.8]

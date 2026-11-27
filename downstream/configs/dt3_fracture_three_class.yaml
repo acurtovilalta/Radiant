@@ -1,0 +1,26 @@
+# DT3 -- three-class fracture classification (FracAtlas; n = 3,999).
+# Frozen encoder + linear head on the globally pooled representation, cross-entropy
+# loss; reported metric: test balanced accuracy (patient-level 5-fold CV).
+# Manifest: python -m downstream.prepare_manifests image-folder --root <FracAtlas/images_processed_for_classification> --out data/downstream/dt3_fracture_three_class.csv
+
+task: DT3
+name: fracture_three_class
+type: classification
+manifest: data/downstream/dt3_fracture_three_class.csv
+num_classes: 3
+class_weighting: false
+metric: balanced_accuracy
+image_size: 224
+n_folds: 5
+val_fraction: 0.15
+seed: 123
+num_workers: 8
+search:
+  n_trials: 10
+  lr: [1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, 1.0e-2]
+  batch_size: [16, 32, 64]
+  weight_decay: [0.0, 1.0e-5, 1.0e-4]
+training:
+  max_epochs: 100
+  patience: 20
+  checkpoint_metric: val_loss   # val_loss | val_metric
